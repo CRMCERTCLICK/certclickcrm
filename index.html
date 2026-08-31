@@ -803,11 +803,11 @@
                                         <option value="not_checked">Não Consultadas</option>
                                     </select>
                                     <select id="sort-client-by" onchange="renderClientsTable()" class="border border-slate-800 rounded-lg px-2 py-1.5 text-xs outline-none font-bold">
-                                        <option value="name">Ordenar: Nome</option>
-                                        <option value="value">Ordenar: Maior Valor</option>
-                                        <option value="recent">Ordenar: Recentes</option>
-                                        <option value="expiration">Ordenar: Expiração</option>
-                                    </select>
+    <option value="expiration" selected>Ordenar: Expiração</option>
+    <option value="name">Ordenar: Nome</option>
+    <option value="value">Ordenar: Maior Valor</option>
+    <option value="recent">Ordenar: Recentes</option>
+</select>
                                 </div>
                             </div>
                             <div class="border-t border-slate-800 pt-3 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 text-xs w-full">
@@ -4347,7 +4347,7 @@ function applyRoleRestrictions() {
                 const search = document.getElementById('search-clients-input')?.value?.toLowerCase() || '';
                 const fStage = document.getElementById('filter-client-stage')?.value || 'all';
                 const fBio = document.getElementById('filter-client-biometry')?.value || 'all';
-                const sortBy = document.getElementById('sort-client-by')?.value || 'name';
+                const sortBy = document.getElementById('sort-client-by')?.value || 'expiration';
                 const expStartVal = document.getElementById('filter-client-exp-start')?.value || '';
                 const expEndVal = document.getElementById('filter-client-exp-end')?.value || '';
                 let list = state.clients.filter(c => {
