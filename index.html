@@ -3288,6 +3288,17 @@ function subscribeSupabaseRealtime() {
                     if (typeof showToast === 'function') showToast("Um usuário foi removido pelo administrador.", "info");
                 }
             })
+
+on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'clients' }, (payload) => {
+    if (state.clients && payload.new) {
+        // Evita duplicatas se o cliente já estiver no estado local
+        if (!state.clients.some(c => c.id === payload.new.id)) {
+            state.clients.push(payload.new);
+            if (typeof refreshAllUI === 'function') refreshAllUI();
+        }
+    }
+})
+
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, (payload) => {
                 if (state.users && payload.new) {
                     const index = state.users.findIndex(u => u.id === payload.new.id);
@@ -6807,16 +6818,25 @@ async function fetchReceitaFederalBulk(data, type) {
     });
 
     // --- INÍCIO DO CÓDIGO QUE VOCÊ VAI COLAR ---
-    const db = window.supabaseClient || (typeof getSupabase === 'function' ? getSupabase() : null) || window.supabase;
+   const db = window.supabaseClient || (typeof getSupabase === 'function' ? getSupabase() : null) || window.supabase;
+const chunkSize = 500; // Divide em lotes de 500 para não estourar o limite da API
 
-    if (db && typeof db.from === 'function') {
+if (db && typeof db.from === 'function') {
+    for (let i = 0; i < newLeads.length; i += chunkSize) {
+        const chunk = newLeads.slice(i, i + chunkSize);
+        
+        const progressText = document.getElementById('import-progress-text');
+        if (progressText) {
+            progressText.textContent = `Salvando lote ${Math.ceil(i/chunkSize) + 1}...`;
+        }
+
         try {
-            const { error } = await db.from('clients').insert(newLeads);
-
+            const { error } = await db.from('clients').insert(chunk);
+            
             if (error) {
-                console.error("Erro na importação para o Supabase:", error);
-                showToast("Erro ao salvar importação no banco: " + error.message, "error");
-                return; 
+                console.error("Erro na importação do lote para o Supabase:", error);
+                showToast("Erro ao salvar lote no banco: " + error.message, "error");
+                return;
             }
         } catch (err) {
             console.error("Erro de conexão:", err);
@@ -6824,6 +6844,7 @@ async function fetchReceitaFederalBulk(data, type) {
             return;
         }
     }
+}
 
     state.clients.push(...newLeads);
 
