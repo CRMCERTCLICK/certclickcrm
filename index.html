@@ -554,16 +554,25 @@
                 <!-- Toast Container -->
                 <div id="toast-container" class="fixed top-20 right-6 z-[9999] flex flex-col gap-2 pointer-events-none items-end"></div>
 
-                <!-- Inactivity Alert -->
-                <div id="inactivity-alert-panel" class="hidden bg-amber-950/20 border border-amber-500/20 p-4 rounded-xl flex items-start gap-3 shadow-sm">
-                    <div class="p-1.5 bg-amber-500/20 text-amber-500 rounded-lg shrink-0">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <div>
-                        <h4 class="font-bold text-xs text-amber-300">Leads Aguardando Acompanhamento (7+ dias)</h4>
-                        <div id="inactive-clients-list" class="flex flex-wrap gap-2 mt-2"></div>
-                    </div>
-                </div>
+              <!-- Inactivity Alert -->
+<div id="inactivity-alert-panel" class="hidden bg-amber-950/20 border border-amber-500/20 p-4 rounded-xl flex-col shadow-sm">
+    <div class="flex items-center justify-between w-full cursor-pointer select-none" onclick="toggleInactiveLeads()">
+        <div class="flex items-center gap-3">
+            <div class="p-1.5 bg-amber-500/20 text-amber-500 rounded-lg shrink-0">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h4 class="font-bold text-xs text-amber-300 flex items-center gap-2">
+                Leads Aguardando Acompanhamento (7+ dias) 
+                <span id="inactive-leads-count" class="px-2 py-0.5 bg-amber-500 text-slate-900 rounded-full text-[10px] font-black">0</span>
+            </h4>
+        </div>
+        <button class="text-amber-500 hover:text-amber-300 transition-colors p-1">
+            <i id="inactive-leads-icon" class="fas fa-chevron-down"></i>
+        </button>
+    </div>
+    <!-- Lista Oculta por Padrão (com scroll limitando a altura máxima) -->
+    <div id="inactive-clients-list" class="hidden flex-wrap gap-2 mt-3 pt-3 border-t border-amber-500/20 max-h-60 overflow-y-auto scrollbar"></div>
+</div>
 
                 <!-- Filter Bar -->
                 <div class="period-bar p-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-print">
@@ -4004,22 +4013,47 @@ function applyRoleRestrictions() {
             }
 
             // ============================================================
-            //  INATIVIDADE ALERT
+            //  INATIVIDADE ALERT (ATUALIZADO PARA EXPANDIR/RECOLHER)
             // ============================================================
+            function toggleInactiveLeads() {
+                const list = document.getElementById('inactive-clients-list');
+                const icon = document.getElementById('inactive-leads-icon');
+                if (list.classList.contains('hidden')) {
+                    list.classList.remove('hidden');
+                    list.classList.add('flex');
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                } else {
+                    list.classList.add('hidden');
+                    list.classList.remove('flex');
+                    icon.classList.remove('fa-chevron-up');
+                    icon.classList.add('fa-chevron-down');
+                }
+            }
+
             function updateInactivityAlerts() {
                 const panel = document.getElementById('inactivity-alert-panel');
                 const list = document.getElementById('inactive-clients-list');
+                const countBadge = document.getElementById('inactive-leads-count');
                 if (!panel || !list) return;
+                
                 const inactiveLeads = state.clients.filter(c => {
                     if (['pago', 'emitido', 'perdido'].includes(c.stage)) return false;
                     return getLeadTemperature(c.lastInteraction).label === 'Frio';
                 });
+                
                 if (inactiveLeads.length > 0) {
                     panel.classList.remove('hidden');
+                    panel.classList.add('flex');
+                    if (countBadge) countBadge.textContent = inactiveLeads.length;
+                    
                     list.innerHTML = inactiveLeads.map(c =>
                         `<span class="px-2 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded text-[10px] font-bold cursor-pointer hover:bg-amber-500/20" onclick="openClientModal('${c.id}')">${escapeHTML(c.name)}</span>`
-                        ).join('');
-                } else panel.classList.add('hidden');
+                    ).join('');
+                } else {
+                    panel.classList.add('hidden');
+                    panel.classList.remove('flex');
+                }
             }
 
             // ============================================================
