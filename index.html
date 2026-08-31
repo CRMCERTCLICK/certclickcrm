@@ -2322,7 +2322,37 @@
     <!-- ============================================================ -->
     <script>
         'use strict';
+// ============================================================
+    // INJEÇÃO FORÇADA DE ESCOPO GLOBAL (COLE LOGO ABAIXO DE 'use strict';)
+    // ============================================================
+    window.handleDragStart = function(e, id) {
+        window.dragSrcId = id;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        setTimeout(() => e.target.classList.add('opacity-50'), 0);
+    };
+    window.handleDragEnd = function(e) {
+        e.target.classList.remove('opacity-50');
+        document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+    };
+    window.allowDrop = function(e) { e.preventDefault(); };
+    window.handleDragEnter = function(e) {
+        e.preventDefault();
+        if(e.currentTarget.classList.contains('kanban-col')) e.currentTarget.classList.add('drag-over');
+    };
+    window.handleDragLeave = function(e) {
+        if(e.currentTarget.classList.contains('kanban-col')) e.currentTarget.classList.remove('drag-over');
+    };
 
+    // Garante que todos os botões do sistema sejam destravados
+    window.addEventListener('DOMContentLoaded', () => {
+        try { window.openClientModal = openClientModal; } catch(e){}
+        try { window.openAccountantModal = openAccountantModal; } catch(e){}
+        try { window.openDailyReportModal = openDailyReportModal; } catch(e){}
+        try { window.openAvatarModal = openAvatarModal; } catch(e){}
+        try { window.openImportModal = openImportModal; } catch(e){}
+        try { window.closeImportModal = closeImportModal; } catch(e){}
+    });
 // ============================================================================
 // SUPABASE CONFIGURATION
 // ============================================================================
