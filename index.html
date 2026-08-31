@@ -825,6 +825,9 @@
                                     <button onclick="setExpDatePreset('monthly')" class="px-2 py-1 bg-slate-800 rounded text-[10px] font-bold text-slate-300">Mês</button>
                                     <button onclick="setExpDatePreset('yearly')" class="px-2 py-1 bg-slate-800 rounded text-[10px] font-bold text-slate-300">Ano</button>
                                     <button onclick="clearExpDateFilters()" class="px-2 py-1 bg-rose-500/10 text-rose-400 rounded text-[10px] font-bold"><i class="fas fa-times"></i> Limpar</button>
+                                <button onclick="copyFilteredEmails()" class="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded text-[10px] font-bold transition-all ml-2" title="Copiar e-mails filtrados">
+    <i class="fas fa-copy"></i> Copiar E-mails
+</button>
                                 </div>
                             </div>
                         </div>
@@ -10812,7 +10815,49 @@ window.submitStandalonePartner = async function() {
                     e.currentTarget.classList.remove('drag-over');
                 }
             }
+// ============================================================
+// COPIAR E-MAILS DA LISTA FILTRADA
+// ============================================================
+function copyFilteredEmails() {
+    const search = document.getElementById('search-clients-input')?.value?.toLowerCase() || '';
+    const fStage = document.getElementById('filter-client-stage')?.value || 'all';
+    const fBio = document.getElementById('filter-client-biometry')?.value || 'all';
+    const expStartVal = document.getElementById('filter-client-exp-start')?.value || '';
+    const expEndVal = document.getElementById('filter-client-exp-end')?.value || '';
 
+    // Aplica as mesmas regras de filtro da tabela
+    let list = state.clients.filter(c => {
+        const matchesPeriod = matchPeriod(c.lastInteraction || c.createdAt);
+        const matchesSearch = c.name.toLowerCase().includes(search) || (c.cpfCnpj || '').includes(search) || (c.phone || '').includes(search);
+        const matchesStage = fStage === 'all' || c.stage === fStage;
+        const matchesBio = fBio === 'all' || c.biometryStatus === fBio;
+        let matchesExpRange = true;
+        
+        if (expStartVal || expEndVal) {
+            if (!c.expirationDate) matchesExpRange = false;
+            else {
+                try {
+                    const expDate = new Date(c.expirationDate + 'T12:00:00');
+                    if (expStartVal) { const startDate = new Date(expStartVal + 'T00:00:00'); if (expDate < startDate) matchesExpRange = false; }
+                    if (expEndVal) { const endDate = new Date(expEndVal + 'T23:59:59'); if (expDate > endDate) matchesExpRange = false; }
+                } catch (e) { matchesExpRange = false; }
+            }
+        }
+        return matchesPeriod && matchesSearch && matchesStage && matchesBio && matchesExpRange;
+    });
+
+    // Pega apenas e-mails válidos (que não estejam vazios e contenham '@')
+    const emails = list.map(c => c.email).filter(e => e && e.trim() !== '' && e.includes('@'));
+    
+    if (emails.length === 0) {
+        showToast("Nenhum e-mail válido encontrado na filtragem atual.", "error");
+        return;
+    }
+
+    // Junta os e-mails com ponto e vírgula e copia para a área de transferência
+    const emailString = emails.join('; ');
+    copyText(emailString, `${emails.length} e-mails copiados com sucesso!`);
+}
             // ============================================================
             // FUNÇÕES DOS MODAIS FALTANTES
             // ============================================================
@@ -10969,6 +11014,7 @@ window.openImportModal = openImportModal;
 window.closeImportModal = closeImportModal;
 window.executeSmartImport = executeSmartImport;
 window.linkClientToAccountant = linkClientToAccountant;
+window.copyFilteredEmails = copyFilteredEmails;
 
 </script>
 
