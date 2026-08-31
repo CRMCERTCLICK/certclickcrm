@@ -10711,49 +10711,131 @@ window.submitStandalonePartner = async function() {
 };
 
 // ============================================================
-// FUNÇÕES DE ARRASTAR E SOLTAR (KANBAN) FALTANTES
-// ============================================================
-function handleDragStart(e, id) {
-    dragSrcId = id;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', id);
-    setTimeout(() => e.target.classList.add('opacity-50'), 0);
-}
+            // FUNÇÕES DE ARRASTAR E SOLTAR (KANBAN) FALTANTES
+            // ============================================================
+            function handleDragStart(e, id) {
+                dragSrcId = id;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', id);
+                setTimeout(() => e.target.classList.add('opacity-50'), 0);
+            }
 
-function handleDragEnd(e) {
-    e.target.classList.remove('opacity-50');
-    document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
-}
+            function handleDragEnd(e) {
+                e.target.classList.remove('opacity-50');
+                document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+            }
 
-function allowDrop(e) {
-    e.preventDefault();
-}
+            function allowDrop(e) {
+                e.preventDefault();
+            }
 
-function handleDragEnter(e) {
-    e.preventDefault();
-    if(e.currentTarget.classList.contains('kanban-col')) {
-        e.currentTarget.classList.add('drag-over');
-    }
-}
+            function handleDragEnter(e) {
+                e.preventDefault();
+                if(e.currentTarget.classList.contains('kanban-col')) {
+                    e.currentTarget.classList.add('drag-over');
+                }
+            }
 
-function handleDragLeave(e) {
-    if(e.currentTarget.classList.contains('kanban-col')) {
-        e.currentTarget.classList.remove('drag-over');
-    }
-}
+            function handleDragLeave(e) {
+                if(e.currentTarget.classList.contains('kanban-col')) {
+                    e.currentTarget.classList.remove('drag-over');
+                }
+            }
 
-// ============================================================
-// FUNÇÕES DOS MODAIS FALTANTES (Para os botões funcionarem)
-// ============================================================
-function openImportModal() {
-    document.getElementById('import-modal').classList.remove('hidden');
-    document.getElementById('import-modal').classList.add('flex');
-}
+            // ============================================================
+            // FUNÇÕES DOS MODAIS FALTANTES
+            // ============================================================
+            function openImportModal() {
+                document.getElementById('import-modal').classList.remove('hidden');
+                document.getElementById('import-modal').classList.add('flex');
+            }
 
-function closeImportModal() {
-    document.getElementById('import-modal').classList.add('hidden');
-    document.getElementById('import-modal').classList.remove('flex');
-}
+            function closeImportModal() {
+                document.getElementById('import-modal').classList.add('hidden');
+                document.getElementById('import-modal').classList.remove('flex');
+            }
+
+            // ============================================================
+            // IMPORTAÇÃO COM SINCRONIZAÇÃO SUPABASE
+            // ============================================================
+            async function executeSmartImport() {
+                const importBtn = document.getElementById('import-execute-btn');
+                if (importBtn) {
+                    importBtn.disabled = true;
+                    importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+                }
+
+                const validClients = state.importData.preview.filter(c => c._isValid && state.importData.selectedIndices.has(c._originalIndex));
+
+                if (validClients.length === 0) {
+                    showToast('Nenhum lead válido selecionado.', 'error');
+                    if (importBtn) {
+                        importBtn.disabled = false;
+                        importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
+                    }
+                    return;
+                }
+
+                const newClients = validClients.map(c => {
+                    return {
+                        id: 'cli_' + Date.now() + Math.random().toString(36).substring(2, 9),
+                        name: c.name,
+                        cpfCnpj: c.doc || '',
+                        phone: c.phone || '',
+                        email: c.email || '',
+                        product: c.product || 'e-CNPJ A1',
+                        price: parseFloat(c.price) || 0,
+                        purchaseDate: c.purchase || '',
+                        expirationDate: c.expiration || '',
+                        stage: 'inbox',
+                        origin: 'import',
+                        assignedTo: state.currentUser ? state.currentUser.id : '',
+                        biometryStatus: 'not_checked',
+                        lastInteraction: new Date().toISOString()
+                    };
+                });
+
+                const db = window.supabaseClient || window.supabase;
+                if (db) {
+                    try {
+                        const { error } = await db.from('clients').insert(newClients);
+                        if (error) {
+                            console.error("Erro no Supabase durante importação:", error);
+                            showToast("Erro ao salvar no banco online: " + error.message, "error");
+                            if (importBtn) {
+                                importBtn.disabled = false;
+                                importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
+                            }
+                            return;
+                        }
+                    } catch (err) {
+                        console.error("Erro de conexão:", err);
+                        showToast("Erro de comunicação com o servidor.", "error");
+                        if (importBtn) {
+                            importBtn.disabled = false;
+                            importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
+                        }
+                        return;
+                    }
+                }
+
+                state.clients.push(...newClients);
+                saveState();
+
+                const stepMapping = document.getElementById('import-step-mapping');
+                const stepResult = document.getElementById('import-step-result');
+                
+                if (stepMapping) stepMapping.classList.add('hidden');
+                if (stepResult) stepResult.classList.remove('hidden');
+                
+                const resImported = document.getElementById('result-imported');
+                const resInbox = document.getElementById('result-inbox');
+                if (resImported) resImported.textContent = newClients.length;
+                if (resInbox) resInbox.textContent = newClients.length;
+
+                refreshAllUI();
+                showToast(`${newClients.length} leads importados com sucesso para a nuvem!`);
+            }
 
 </script>
 
