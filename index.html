@@ -3289,11 +3289,20 @@ function subscribeSupabaseRealtime() {
                 }
             })
 
-on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'clients' }, (payload) => {
+.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'clients' }, (payload) => {
     if (state.clients && payload.new) {
         // Evita duplicatas se o cliente já estiver no estado local
         if (!state.clients.some(c => c.id === payload.new.id)) {
             state.clients.push(payload.new);
+            if (typeof refreshAllUI === 'function') refreshAllUI();
+        }
+    }
+})
+.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'clients' }, (payload) => {
+    if (state.clients && payload.new) {
+        const index = state.clients.findIndex(c => c.id === payload.new.id);
+        if (index !== -1) {
+            state.clients[index] = payload.new;
             if (typeof refreshAllUI === 'function') refreshAllUI();
         }
     }
@@ -4070,20 +4079,36 @@ function applyRoleRestrictions() {
             // ============================================================
             //  KANBAN
             // ============================================================
-            function moveLeadStageFromButton(clientId, nextStage) {
-                const idx = state.clients.findIndex(c => c.id === clientId);
-                if (idx !== -1) {
-                    const oldStage = state.clients[idx].stage;
-                    state.clients[idx].stage = nextStage;
-                    state.clients[idx].lastInteraction = new Date().toISOString();
-                    state.logs.push({ id: 'l-' + Date.now(), clientId, text: `Movido de ${oldStage.toUpperCase()} para ${nextStage.toUpperCase()}`,
-                        timestamp: new Date().toISOString() });
-                    state.dailyScore += 5;
-                    saveState();
-                    refreshAllUI();
-                    showToast(`Lead atualizado para ${nextStage.toUpperCase()}`);
-                }
+           async function moveLeadStageFromButton(clientId, nextStage) {
+    const idx = state.clients.findIndex(c => c.id === clientId);
+    if (idx !== -1) {
+        const oldStage = state.clients[idx].stage;
+        const nowIso = new Date().toISOString();
+        
+        // 1. Atualiza visualmente primeiro para não ter atraso na tela (Optimistic UI)
+        state.clients[idx].stage = nextStage;
+        state.clients[idx].lastInteraction = nowIso;
+        refreshAllUI(); 
+        
+        // 2. Salva a mudança no Supabase
+        const db = window.supabaseClient || window.supabase;
+        if (db) {
+            const { error } = await db.from('clients')
+                .update({ stage: nextStage, lastInteraction: nowIso })
+                .eq('id', clientId);
+                
+            if (error) {
+                console.error("Erro ao mover lead:", error);
+                showToast("Erro ao sincronizar com o servidor.", "error");
             }
+        }
+
+        state.logs.push({ id: 'l-' + Date.now(), clientId, text: `Movido de ${oldStage.toUpperCase()} para ${nextStage.toUpperCase()}`, timestamp: nowIso });
+        state.dailyScore += 5;
+        saveState();
+        showToast(`Lead atualizado para ${nextStage.toUpperCase()}`);
+    }
+}
 
             function renderKanban() {
                 const stages = ['inbox', 'lead', 'agendado', 'pago', 'emitido', 'perdido'];
@@ -4129,42 +4154,46 @@ function applyRoleRestrictions() {
             // ============================================================
             //  DRAG & DROP
             // ============================================================
-            function handleDragStart(e, id) { dragSrcId = id;
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', id); }
-
-            function handleDragEnd(e) { e.target.classList.remove('is-dragging'); }
-
-            function handleDragEnter(e) { e.preventDefault();
-                e.currentTarget.classList.add('drag-over'); }
-
-            function handleDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
-
-            function allowDrop(e) { e.preventDefault(); }
-
-            function handleDrop(e) {
-                e.preventDefault();
-                const col = e.currentTarget;
-                col.classList.remove('drag-over');
-                const stage = col.dataset.stage;
-                const id = e.dataTransfer.getData('text/plain') || dragSrcId;
-                if (id && stage) {
-                    const idx = state.clients.findIndex(c => c.id === id);
-                    if (idx !== -1 && state.clients[idx].stage !== stage) {
-                        const oldStage = state.clients[idx].stage;
-                        state.clients[idx].stage = stage;
-                        state.clients[idx].lastInteraction = new Date().toISOString();
-                        state.logs.push({ id: 'l-' + Date.now(), clientId: id,
-                            text: `Movido de ${oldStage.toUpperCase()} para ${stage.toUpperCase()} via Kanban.`,
-                            timestamp: new Date().toISOString() });
-                        state.dailyScore += 5;
-                        saveState();
-                        refreshAllUI();
-                        showToast(`Fase atualizada para ${stage.toUpperCase()}`);
-                    }
+           async function handleDrop(e) {
+    e.preventDefault();
+    const col = e.currentTarget;
+    col.classList.remove('drag-over');
+    const stage = col.dataset.stage;
+    const id = e.dataTransfer.getData('text/plain') || dragSrcId;
+    
+    if (id && stage) {
+        const idx = state.clients.findIndex(c => c.id === id);
+        if (idx !== -1 && state.clients[idx].stage !== stage) {
+            const oldStage = state.clients[idx].stage;
+            const nowIso = new Date().toISOString();
+            
+            // 1. Atualiza visualmente primeiro
+            state.clients[idx].stage = stage;
+            state.clients[idx].lastInteraction = nowIso;
+            refreshAllUI();
+            
+            // 2. Envia para o Supabase
+            const db = window.supabaseClient || window.supabase;
+            if (db) {
+                const { error } = await db.from('clients')
+                    .update({ stage: stage, lastInteraction: nowIso })
+                    .eq('id', id);
+                    
+                if (error) {
+                    console.error("Erro ao mover lead no drop:", error);
+                    showToast("Erro ao sincronizar com o servidor.", "error");
                 }
             }
 
+            state.logs.push({ id: 'l-' + Date.now(), clientId: id,
+                text: `Movido de ${oldStage.toUpperCase()} para ${stage.toUpperCase()} via Kanban.`,
+                timestamp: nowIso });
+            state.dailyScore += 5;
+            saveState();
+            showToast(`Fase atualizada para ${stage.toUpperCase()}`);
+        }
+    }
+}
             // ============================================================
             //  CLIENTES
             // ============================================================
