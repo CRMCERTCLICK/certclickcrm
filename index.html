@@ -5081,78 +5081,114 @@ async function fetchReceitaFederalBulk(data, type) {
             }
 
             function viewPartnerHistory(accountantId) {
-                const accountant = state.accountants.find(a => a.id === accountantId);
-                if (!accountant) return showToast('Parceiro não encontrado.', 'error');
-                
-                const section = document.getElementById('partner-history-section');
-                const content = document.getElementById('partner-history-content');
-                
-                const clients = state.clients.filter(c => c.accountantId === accountantId);
-                const wonClients = clients.filter(c => ['pago', 'emitido'].includes(c.stage));
-                
-                section.classList.remove('hidden');
-                
-                if (!clients.length) {
-                    content.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">Nenhum cliente associado a este parceiro.</p>`;
-                    return;
-                }
-                
-                let html = `
-                    <div class="mb-3 flex justify-between items-center text-xs">
-                        <span class="font-bold text-slate-300">${escapeHTML(accountant.name)}</span>
-                        <span class="text-slate-500">${clients.length} clientes | ${wonClients.length} pagos</span>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Cliente</th>
-                                <th>Produto</th>
-                                <th>Valor</th>
-                                <th>Status</th>
-                                <th>Data</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                
-                clients.sort((a, b) => new Date(b.lastInteraction || 0) - new Date(a.lastInteraction || 0)).forEach(c => {
-                    const statusLabels = {
-                        'inbox': 'Inbox',
-                        'lead': 'Contato',
-                        'agendado': 'Agendado',
-                        'pago': '✅ Pago',
-                        'emitido': '✅ Emitido',
-                        'perdido': '❌ Perdido'
-                    };
-                    const statusColors = {
-                        'inbox': 'text-slate-400',
-                        'lead': 'text-indigo-400',
-                        'agendado': 'text-amber-400',
-                        'pago': 'text-brand-400',
-                        'emitido': 'text-emerald-400',
-                        'perdido': 'text-rose-400'
-                    };
-                    html += `
-                        <tr>
-                            <td class="font-medium text-slate-200">${escapeHTML(c.name)}</td>
-                            <td class="text-slate-300">${escapeHTML(c.product || '-')}</td>
-                            <td class="font-bold text-brand-400">${formatCurrency(c.price)}</td>
-                            <td class="${statusColors[c.stage] || 'text-slate-400'}">${statusLabels[c.stage] || c.stage}</td>
-                            <td class="text-slate-500 font-mono text-[9px]">${formatDateShort(c.purchaseDate || c.lastInteraction)}</td>
-                        </tr>
-                    `;
-                });
-                
-                html += `
-                        </tbody>
-                    </table>
-                `;
-                
-                content.innerHTML = html;
-                document.getElementById('main-scroll-area').scrollTop = document.getElementById('partner-history-section').offsetTop - 100;
-                showToast(`Histórico de ${accountant.name} carregado.`);
-            }
+    const accountant = state.accountants.find(a => a.id === accountantId);
+    if (!accountant) return showToast('Parceiro não encontrado.', 'error');
+    
+    const section = document.getElementById('partner-history-section');
+    const content = document.getElementById('partner-history-content');
+    
+    const clients = state.clients.filter(c => c.accountantId === accountantId);
+    const wonClients = clients.filter(c => ['pago', 'emitido'].includes(c.stage));
+    
+    section.classList.remove('hidden');
+    
+    // Filtra os clientes que AINDA NÃO são deste parceiro para preencher a busca
+    const availableClients = state.clients.filter(c => c.accountantId !== accountantId);
+    
+    let html = `
+        <div class="mb-3 flex justify-between items-center text-xs">
+            <span class="font-bold text-slate-300">${escapeHTML(accountant.name)}</span>
+            <span class="text-slate-500">${clients.length} clientes | ${wonClients.length} pagos</span>
+        </div>
 
+        <!-- NOVA ÁREA DE VÍNCULO -->
+        <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 flex flex-col gap-2">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Vincular Cliente Existente</label>
+            <div class="flex gap-2">
+                <select id="link-client-select-${accountantId}" class="flex-1 border border-slate-800 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-brand-500 bg-slate-950">
+                    <option value="">Buscar pelo Nome ou CNPJ/CPF...</option>
+                    ${availableClients.map(c => `<option value="${c.id}">${escapeHTML(c.name)} - ${escapeHTML(c.cpfCnpj || 'Sem doc')}</option>`).join('')}
+                </select>
+                <button onclick="linkClientToAccountant('${accountantId}')" class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-surface-darker text-xs font-bold rounded-lg transition-all">Vincular</button>
+            </div>
+        </div>
+        <!-- FIM DA NOVA ÁREA -->
+
+    `;
+    
+    if (!clients.length) {
+        html += `<p class="text-xs text-slate-500 text-center py-4 border-t border-slate-800 mt-4">Nenhum cliente associado a este parceiro ainda.</p>`;
+    } else {
+        html += `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Produto</th>
+                        <th>Valor</th>
+                        <th>Status</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        clients.sort((a, b) => new Date(b.lastInteraction || 0) - new Date(a.lastInteraction || 0)).forEach(c => {
+            const statusLabels = { 'inbox': 'Inbox', 'lead': 'Contato', 'agendado': 'Agendado', 'pago': '✅ Pago', 'emitido': '✅ Emitido', 'perdido': '❌ Perdido' };
+            const statusColors = { 'inbox': 'text-slate-400', 'lead': 'text-indigo-400', 'agendado': 'text-amber-400', 'pago': 'text-brand-400', 'emitido': 'text-emerald-400', 'perdido': 'text-rose-400' };
+            html += `
+                <tr>
+                    <td class="font-medium text-slate-200">${escapeHTML(c.name)}</td>
+                    <td class="text-slate-300">${escapeHTML(c.product || '-')}</td>
+                    <td class="font-bold text-brand-400">${formatCurrency(c.price)}</td>
+                    <td class="${statusColors[c.stage] || 'text-slate-400'}">${statusLabels[c.stage] || c.stage}</td>
+                    <td class="text-slate-500 font-mono text-[9px]">${formatDateShort(c.purchaseDate || c.lastInteraction)}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+    }
+    
+    content.innerHTML = html;
+    document.getElementById('main-scroll-area').scrollTop = document.getElementById('partner-history-section').offsetTop - 100;
+}
+async function linkClientToAccountant(accountantId) {
+    const selectEl = document.getElementById(`link-client-select-${accountantId}`);
+    const clientId = selectEl.value;
+    
+    if (!clientId) {
+        showToast("Selecione um cliente na lista primeiro.", "error");
+        return;
+    }
+
+    // 1. Atualiza no Supabase
+    const db = window.supabaseClient || window.supabase;
+    if (db) {
+        const { error } = await db.from('clients')
+            .update({ accountantId: accountantId })
+            .eq('id', clientId);
+            
+        if (error) {
+            showToast("Erro ao vincular na nuvem: " + error.message, "error");
+            return;
+        }
+    }
+
+    // 2. Atualiza no estado local
+    const clientIndex = state.clients.findIndex(c => c.id === clientId);
+    if (clientIndex !== -1) {
+        state.clients[clientIndex].accountantId = accountantId;
+        if (typeof saveState === 'function') saveState();
+    }
+
+    showToast("Cliente vinculado ao parceiro com sucesso!");
+    
+    // 3. Atualiza a tela de histórico para mostrar o cliente novo na lista
+    viewPartnerHistory(accountantId);
+    if (typeof renderAccountantsTable === 'function') renderAccountantsTable();
+    if (typeof updateFinancialData === 'function') updateFinancialData();
+}
             function closePartnerHistory() {
                 document.getElementById('partner-history-section').classList.add('hidden');
             }
@@ -10932,7 +10968,7 @@ window.handleDragLeave = handleDragLeave;
 window.openImportModal = openImportModal;
 window.closeImportModal = closeImportModal;
 window.executeSmartImport = executeSmartImport;
-
+window.linkClientToAccountant = linkClientToAccountant;
 
 </script>
 
