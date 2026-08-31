@@ -2860,7 +2860,7 @@ window.loadState = async function loadState() {
             { data: dbGoals, error: errGoals }
         ] = await Promise.all([
             supabase.from('users').select('*'),
-            supabase.from('clients').select('*'),
+            supabase.from('clients').select('*').limit(100000),
             supabase.from('accountants').select('*'),
             supabase.from('logs').select('*').order('timestamp', { ascending: false }).limit(300),
             supabase.from('campaigns').select('*'),
