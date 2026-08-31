@@ -4292,7 +4292,7 @@ function applyRoleRestrictions() {
                 showToast('Seleção cancelada.');
             }
 
-            async function executeBulkDelete() {
+          async function executeBulkDelete() {
     const count = state._selectedClients.size;
     if (count === 0) return showToast('Nenhum lead selecionado.', 'error');
 
@@ -4304,20 +4304,25 @@ function applyRoleRestrictions() {
             const db = window.supabaseClient || (typeof getSupabase === 'function' ? getSupabase() : null) || window.supabase;
 
             if (db && typeof db.from === 'function') {
-                try {
-                    // Apaga todos os selecionados via array de IDs (Cláusula IN do Supabase)
-                    const { error } = await db.from('clients').delete().in('id', idsToDelete);
-                    if (error) {
-                        showToast("Erro ao excluir no Supabase: " + error.message, "error");
-                        return;
+                showToast("Iniciando exclusão em massa... Aguarde.");
+                
+                // Divide a lista gigantesca em lotes de 500 para não estourar o limite da API
+                const chunkSize = 500;
+                for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+                    const chunk = idsToDelete.slice(i, i + chunkSize);
+                    try {
+                        const { error } = await db.from('clients').delete().in('id', chunk);
+                        if (error) {
+                            console.error("Erro ao excluir lote:", error);
+                            showToast("Erro parcial durante a exclusão.", "error");
+                        }
+                    } catch (err) {
+                        console.error("Erro de conexão no lote:", err);
                     }
-                } catch (err) {
-                    showToast("Erro na comunicação com Supabase.", "error");
-                    return;
                 }
             }
 
-            // Atualiza estado local do CRM
+            // Atualiza estado local do CRM após todos os lotes serem apagados
             state.clients = state.clients.filter(c => !idsToDelete.includes(c.id));
             state._selectedClients.clear();
             
