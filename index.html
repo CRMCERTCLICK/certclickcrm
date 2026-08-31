@@ -10854,6 +10854,51 @@ window.submitStandalonePartner = async function() {
     showToast(`${newClients.length} leads importados com sucesso!`);
 }
 
+// ============================================================
+// COLE O CÓDIGO NOVO A PARTIR DAQUI:
+// ============================================================
+function handleDragStart(e, id) {
+    window.dragSrcId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    setTimeout(() => e.target.classList.add('opacity-50'), 0);
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('opacity-50');
+    document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+}
+
+function allowDrop(e) {
+    e.preventDefault();
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    if(e.currentTarget.classList.contains('kanban-col')) {
+        e.currentTarget.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    if(e.currentTarget.classList.contains('kanban-col')) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+}
+
+// ============================================================
+// EXPORTANDO PARA O ESCOPO GLOBAL (Para o HTML enxergar)
+// ============================================================
+window.handleDragStart = handleDragStart;
+window.handleDragEnd = handleDragEnd;
+window.allowDrop = allowDrop;
+window.handleDragEnter = handleDragEnter;
+window.handleDragLeave = handleDragLeave;
+window.openImportModal = openImportModal;
+window.closeImportModal = closeImportModal;
+window.executeSmartImport = executeSmartImport;
+
+
 </script>
 
 </body>
