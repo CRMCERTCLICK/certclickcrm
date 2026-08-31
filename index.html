@@ -10711,6 +10711,52 @@ window.submitStandalonePartner = async function() {
         btn.innerHTML = '<i class="fas fa-check-circle" style="margin-right: 0.5rem;"></i> Finalizar Cadastro';
     }
 };
+
+// ============================================================
+// FUNÇÕES DE ARRASTAR E SOLTAR (KANBAN) FALTANTES
+// ============================================================
+function handleDragStart(e, id) {
+    dragSrcId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    setTimeout(() => e.target.classList.add('opacity-50'), 0);
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('opacity-50');
+    document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+}
+
+function allowDrop(e) {
+    e.preventDefault();
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    if(e.currentTarget.classList.contains('kanban-col')) {
+        e.currentTarget.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    if(e.currentTarget.classList.contains('kanban-col')) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+}
+
+// ============================================================
+// FUNÇÕES DOS MODAIS FALTANTES (Para os botões funcionarem)
+// ============================================================
+function openImportModal() {
+    document.getElementById('import-modal').classList.remove('hidden');
+    document.getElementById('import-modal').classList.add('flex');
+}
+
+function closeImportModal() {
+    document.getElementById('import-modal').classList.add('hidden');
+    document.getElementById('import-modal').classList.remove('flex');
+}
+
 </script>
 
 </body>
