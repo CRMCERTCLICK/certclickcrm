@@ -10758,84 +10758,101 @@ window.submitStandalonePartner = async function() {
             // ============================================================
             // IMPORTAÇÃO COM SINCRONIZAÇÃO SUPABASE
             // ============================================================
-            async function executeSmartImport() {
-                const importBtn = document.getElementById('import-execute-btn');
-                if (importBtn) {
-                    importBtn.disabled = true;
-                    importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
-                }
+           async function executeSmartImport() {
+    const importBtn = document.getElementById('import-execute-btn');
+    if (importBtn) {
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    }
 
-                const validClients = state.importData.preview.filter(c => c._isValid && state.importData.selectedIndices.has(c._originalIndex));
-
-                if (validClients.length === 0) {
-                    showToast('Nenhum lead válido selecionado.', 'error');
-                    if (importBtn) {
-                        importBtn.disabled = false;
-                        importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
-                    }
-                    return;
-                }
-
-                const newClients = validClients.map(c => {
-                    return {
-                        id: 'cli_' + Date.now() + Math.random().toString(36).substring(2, 9),
-                        name: c.name,
-                        cpfCnpj: c.doc || '',
-                        phone: c.phone || '',
-                        email: c.email || '',
-                        product: c.product || 'e-CNPJ A1',
-                        price: parseFloat(c.price) || 0,
-                        purchaseDate: c.purchase || '',
-                        expirationDate: c.expiration || '',
-                        stage: 'inbox',
-                        origin: 'import',
-                        assignedTo: state.currentUser ? state.currentUser.id : '',
-                        biometryStatus: 'not_checked',
-                        lastInteraction: new Date().toISOString()
-                    };
-                });
-
-                const db = window.supabaseClient || window.supabase;
-                if (db) {
-                    try {
-                        const { error } = await db.from('clients').insert(newClients);
-                        if (error) {
-                            console.error("Erro no Supabase durante importação:", error);
-                            showToast("Erro ao salvar no banco online: " + error.message, "error");
-                            if (importBtn) {
-                                importBtn.disabled = false;
-                                importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
-                            }
-                            return;
-                        }
-                    } catch (err) {
-                        console.error("Erro de conexão:", err);
-                        showToast("Erro de comunicação com o servidor.", "error");
-                        if (importBtn) {
-                            importBtn.disabled = false;
-                            importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
-                        }
-                        return;
-                    }
-                }
-
-                state.clients.push(...newClients);
-                saveState();
-
-                const stepMapping = document.getElementById('import-step-mapping');
-                const stepResult = document.getElementById('import-step-result');
-                
-                if (stepMapping) stepMapping.classList.add('hidden');
-                if (stepResult) stepResult.classList.remove('hidden');
-                
-                const resImported = document.getElementById('result-imported');
-                const resInbox = document.getElementById('result-inbox');
-                if (resImported) resImported.textContent = newClients.length;
-                if (resInbox) resInbox.textContent = newClients.length;
-
-                refreshAllUI();
-                showToast(`${newClients.length} leads importados com sucesso para a nuvem!`);
+    // Busca leads da memória usando um filtro flexível
+    let validClients = [];
+    if (state.importData && state.importData.preview) {
+        validClients = state.importData.preview.filter(c => {
+            // Ignora explicitamente os que têm status de erro
+            if (c._isValid === false || c.status === 'invalid' || c.status === 'conflict' || c.status === 'duplicate') {
+                return false;
             }
+            
+            // Verifica a seleção. Se a lista de seleção estiver vazia/quebrada, importa todos os válidos por padrão.
+            if (state.importData.selectedIndices && state.importData.selectedIndices.size > 0) {
+                return state.importData.selectedIndices.has(c._originalIndex) || state.importData.selectedIndices.has(c.index) || state.importData.selectedIndices.has(c.id);
+            }
+            return true; 
+        });
+    }
+
+    if (validClients.length === 0) {
+        showToast('Nenhum lead válido selecionado.', 'error');
+        if (importBtn) {
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
+        }
+        return;
+    }
+
+    // Mapeia os dados garantindo que encontre a coluna certa, independente de como o sistema a nomeou
+    const newClients = validClients.map(c => {
+        return {
+            id: 'cli_' + Date.now() + Math.random().toString(36).substring(2, 9),
+            name: c.name || c.nome || c['NOME / RAZÃO'] || 'Lead Importado',
+            cpfCnpj: c.doc || c.documento || c.cpfCnpj || '',
+            phone: c.phone || c.telefone || '',
+            email: c.email || '',
+            product: c.product || c.produto || 'e-CNPJ A1',
+            price: parseFloat(c.price || c.valor) || 0,
+            purchaseDate: c.purchase || c.emissao || '',
+            expirationDate: c.expiration || c.validade || '',
+            stage: 'inbox',
+            origin: 'import',
+            assignedTo: state.currentUser ? state.currentUser.id : '',
+            biometryStatus: 'not_checked',
+            lastInteraction: new Date().toISOString()
+        };
+    });
+
+    // 1. SINCRONIZA COM O SUPABASE
+    const db = window.supabaseClient || window.supabase;
+    if (db) {
+        try {
+            const { error } = await db.from('clients').insert(newClients);
+            if (error) {
+                console.error("Erro no Supabase:", error);
+                showToast("Erro no banco de dados: " + error.message, "error");
+                if (importBtn) {
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
+                }
+                return;
+            }
+        } catch (err) {
+            console.error("Erro de conexão:", err);
+            showToast("Erro de comunicação.", "error");
+            if (importBtn) {
+                importBtn.disabled = false;
+                importBtn.innerHTML = '<i class="fas fa-rocket"></i> Importar';
+            }
+            return;
+        }
+    }
+
+    // 2. SALVA LOCALMENTE E ATUALIZA A TELA
+    state.clients.push(...newClients);
+    if (typeof saveState === 'function') saveState();
+
+    const stepMapping = document.getElementById('import-step-mapping');
+    const stepResult = document.getElementById('import-step-result');
+    if (stepMapping) stepMapping.classList.add('hidden');
+    if (stepResult) stepResult.classList.remove('hidden');
+    
+    const resImported = document.getElementById('result-imported');
+    const resInbox = document.getElementById('result-inbox');
+    if (resImported) resImported.textContent = newClients.length;
+    if (resInbox) resInbox.textContent = newClients.length;
+
+    if (typeof refreshAllUI === 'function') refreshAllUI();
+    showToast(`${newClients.length} leads importados com sucesso!`);
+}
 
 </script>
 
