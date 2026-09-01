@@ -2383,13 +2383,12 @@ async function saveClient(e) {
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
 
-    const db = window.supabaseClient || (typeof getSupabase === 'function' ? getSupabase() : null) || window.supabase;
+    const db = window.supabaseClient || window.supabase;
     if (!db) {
-        alert("Erro: O cliente Supabase não foi carregado.");
+        showToast("Erro: Cliente Supabase não carregado.", "error");
         return false;
     }
 
-    // Captura os dados do modal
     const idInput = document.getElementById('client-id');
     const nameInput = document.getElementById('client-name');
     const phoneInput = document.getElementById('client-phone');
@@ -2405,13 +2404,17 @@ async function saveClient(e) {
     const eDateInput = document.getElementById('client-expiration-date');
 
     const name = nameInput ? nameInput.value.trim() : '';
-    
     if (!name) {
-        alert("Por favor, preencha o Nome do cliente.");
+        showToast("Por favor, preencha o Nome do cliente.", "error");
         return false;
     }
 
-    // Monta o objeto completo para não perder nenhum dado na edição[cite: 1]
+    // CORREÇÃO 1: Tratar a vírgula para não zerar o valor
+    let finalPrice = 0;
+    if (priceInput && priceInput.value) {
+        finalPrice = parseFloat(priceInput.value.replace(',', '.')) || 0;
+    }
+
     const payload = {
         id: (idInput && idInput.value) ? idInput.value : ('cli_' + Date.now()),
         name: name,
@@ -2419,8 +2422,8 @@ async function saveClient(e) {
         email: emailInput ? emailInput.value.trim() : '',
         cpfCnpj: docInput ? docInput.value.trim() : '',
         stage: stageSelect ? stageSelect.value : 'lead',
-        product: productSelect ? productSelect.value.split('|')[0] : '', // Salva só o nome do produto
-        price: priceInput ? parseFloat(priceInput.value) || 0 : 0,
+        product: productSelect ? productSelect.value.split('|')[0] : '',
+        price: finalPrice, // Valor real e corrigido
         accountantId: accountantSelect ? accountantSelect.value : '',
         assignedTo: assignedSelect ? assignedSelect.value : '',
         biometryStatus: biometrySelect ? biometrySelect.value : 'not_checked',
@@ -2429,26 +2432,31 @@ async function saveClient(e) {
         lastInteraction: new Date().toISOString()
     };
 
-    try {
-        // Upsert: Se a lead já existir, ele atualiza, se não, ele cria uma nova mantendo TUDO!
-        const { error } = await db.from('clients').upsert([payload]);
+    // CORREÇÃO 2: Atualizar imediatamente na tela para não duplicar
+    const existingIndex = state.clients.findIndex(c => c.id === payload.id);
+    if (existingIndex >= 0) {
+        state.clients[existingIndex] = { ...state.clients[existingIndex], ...payload };
+    } else {
+        state.clients.push(payload);
+    }
 
+    try {
+        const { error } = await db.from('clients').upsert([payload]);
         if (error) {
-            console.error("Erro retornado pelo Supabase:", error);
+            console.error("Erro no Supabase:", error);
             showToast("Erro do Supabase: " + error.message, "error");
             return false;
         }
 
-        showToast("Lead salvo com sucesso no banco de dados!");
-
-        // Atualiza a tela e fecha o modal
+        showToast("Lead salvo com sucesso!");
+        saveState();
+        
         if (typeof closeClientModal === 'function') closeClientModal();
-        if (typeof window.loadState === 'function') await window.loadState();
         refreshAllUI();
 
     } catch (err) {
-        console.error("Erro fatal ao gravar:", err);
-        showToast("Erro inesperado: " + err.message, "error");
+        console.error("Erro ao gravar:", err);
+        showToast("Erro: " + err.message, "error");
     }
 
     return false;
@@ -4191,9 +4199,8 @@ function applyRoleRestrictions() {
                             `<span class="text-[8px] text-slate-500">👤 ${assignedUser.name.split(' ')[0]}</span>` :
                             '';
                             
-                        // Botão de Excluir liberado no Kanban[cite: 1]
-                        const delBtnKanban = ['admin', 'developer'].includes(state.currentUser.role) ?
-                            `<button onclick="deleteClient('${c.id}')" class="p-1 hover:bg-rose-500/20 rounded text-rose-500 transition-colors" title="Excluir"><i class="fas fa-trash text-[10px]"></i></button>` : '';
+                        // CORREÇÃO 3: Lixeira livre e visível no Kanban
+                        const delBtnKanban = `<button onclick="deleteClient('${c.id}')" class="p-1 hover:bg-rose-500/20 rounded text-rose-500 transition-colors" title="Excluir"><i class="fas fa-trash text-[10px]"></i></button>`;
 
                         return `<div class="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-sm cursor-grab hover:border-brand-500 transition-all relative overflow-hidden" draggable="true" ondragstart="handleDragStart(event, '${c.id}')" ondragend="handleDragEnd(event)">
                             <div class="absolute left-0 top-0 bottom-0 w-1 ${statusColor}"></div>
