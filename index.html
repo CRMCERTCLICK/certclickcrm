@@ -2378,66 +2378,77 @@ function getSupabase() {
 var supabase = getSupabase();
 
 async function saveClient(e) {
-    // 1. OBRIGATÓRIO: Impede que a página recarregue ao clicar
     if (e) {
         if (typeof e.preventDefault === 'function') e.preventDefault();
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
 
-    // 2. Obtém a instância do Supabase
     const db = window.supabaseClient || (typeof getSupabase === 'function' ? getSupabase() : null) || window.supabase;
     if (!db) {
         alert("Erro: O cliente Supabase não foi carregado.");
         return false;
     }
 
-    // 3. Captura dos elementos do modal
-    const nameInput = document.getElementById('client-name') || document.querySelector('#client-modal input[type="text"]');
-    const phoneInput = document.getElementById('client-phone') || document.querySelector('#client-modal input[type="tel"]');
-    const emailInput = document.getElementById('client-email') || document.querySelector('#client-modal input[type="email"]');
-    const docInput = document.getElementById('client-doc') || document.getElementById('client-cpf');
+    // Captura os dados do modal
+    const idInput = document.getElementById('client-id');
+    const nameInput = document.getElementById('client-name');
+    const phoneInput = document.getElementById('client-phone');
+    const emailInput = document.getElementById('client-email');
+    const docInput = document.getElementById('client-doc');
     const stageSelect = document.getElementById('client-stage');
+    const productSelect = document.getElementById('client-product');
+    const priceInput = document.getElementById('client-price');
+    const accountantSelect = document.getElementById('client-accountant');
+    const assignedSelect = document.getElementById('client-assigned-to');
+    const biometrySelect = document.getElementById('client-biometry');
+    const pDateInput = document.getElementById('client-purchase-date');
+    const eDateInput = document.getElementById('client-expiration-date');
 
     const name = nameInput ? nameInput.value.trim() : '';
-    const phone = phoneInput ? phoneInput.value.trim() : '';
-    const email = emailInput ? emailInput.value.trim() : '';
-    const cpfCnpj = docInput ? docInput.value.trim() : '';
-    const stage = stageSelect ? stageSelect.value : 'lead';
-
+    
     if (!name) {
         alert("Por favor, preencha o Nome do cliente.");
         return false;
     }
 
+    // Monta o objeto completo para não perder nenhum dado na edição[cite: 1]
     const payload = {
-        id: 'cli_' + Date.now(),
+        id: (idInput && idInput.value) ? idInput.value : ('cli_' + Date.now()),
         name: name,
-        phone: phone,
-        email: email,
-        cpfCnpj: cpfCnpj,
-        stage: stage
+        phone: phoneInput ? phoneInput.value.trim() : '',
+        email: emailInput ? emailInput.value.trim() : '',
+        cpfCnpj: docInput ? docInput.value.trim() : '',
+        stage: stageSelect ? stageSelect.value : 'lead',
+        product: productSelect ? productSelect.value.split('|')[0] : '', // Salva só o nome do produto
+        price: priceInput ? parseFloat(priceInput.value) || 0 : 0,
+        accountantId: accountantSelect ? accountantSelect.value : '',
+        assignedTo: assignedSelect ? assignedSelect.value : '',
+        biometryStatus: biometrySelect ? biometrySelect.value : 'not_checked',
+        purchaseDate: (pDateInput && pDateInput.value) ? pDateInput.value : null,
+        expirationDate: (eDateInput && eDateInput.value) ? eDateInput.value : null,
+        lastInteraction: new Date().toISOString()
     };
 
-    console.log("Enviando cliente para o Supabase...", payload);
-
     try {
-        const result = await db.from('clients').insert([payload]);
+        // Upsert: Se a lead já existir, ele atualiza, se não, ele cria uma nova mantendo TUDO!
+        const { error } = await db.from('clients').upsert([payload]);
 
-        if (result.error) {
-            console.error("Erro retornado pelo Supabase:", result.error);
-            alert("Erro do Supabase: " + result.error.message);
+        if (error) {
+            console.error("Erro retornado pelo Supabase:", error);
+            showToast("Erro do Supabase: " + error.message, "error");
             return false;
         }
 
-        console.log("GRAVADO COM SUCESSO NO SUPABASE!", result);
-        alert("Cliente cadastrado com sucesso no Supabase!");
+        showToast("Lead salvo com sucesso no banco de dados!");
 
+        // Atualiza a tela e fecha o modal
+        if (typeof closeClientModal === 'function') closeClientModal();
         if (typeof window.loadState === 'function') await window.loadState();
-        if (typeof closeModal === 'function') closeModal('client-modal');
+        refreshAllUI();
 
     } catch (err) {
         console.error("Erro fatal ao gravar:", err);
-        alert("Erro inesperado: " + err.message);
+        showToast("Erro inesperado: " + err.message, "error");
     }
 
     return false;
@@ -4174,11 +4185,35 @@ function applyRoleRestrictions() {
                         let moveControls = '';
                         if (flow) { moveControls =
                                 `<div class="flex items-center gap-1 shrink-0">${flow.prev ? `<button onclick="moveLeadStageFromButton('${c.id}', '${flow.prev}')" class="p-1 bg-slate-800 rounded text-slate-400 hover:text-brand-500 transition-colors" title="Voltar"><i class="fas fa-chevron-left text-[9px]"></i></button>` : ''}${flow.next ? `<button onclick="moveLeadStageFromButton('${c.id}', '${flow.next}')" class="p-1 bg-slate-800 rounded text-slate-400 hover:text-brand-500 transition-colors" title="Avançar"><i class="fas fa-chevron-right text-[9px]"></i></button>` : ''}</div>`; }
+                        
                         const assignedUser = state.users.find(u => u.id === c.assignedTo);
                         const assignedLabel = assignedUser ?
                             `<span class="text-[8px] text-slate-500">👤 ${assignedUser.name.split(' ')[0]}</span>` :
                             '';
-                        return `<div class="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-sm cursor-grab hover:border-brand-500 transition-all relative overflow-hidden" draggable="true" ondragstart="handleDragStart(event, '${c.id}')" ondragend="handleDragEnd(event)"><div class="absolute left-0 top-0 bottom-0 w-1 ${statusColor}"></div><div class="flex justify-between items-start mb-1.5 pl-1.5"><div class="truncate pr-1"><span class="font-bold text-slate-200 text-xs truncate block" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</span><span class="inline-block text-[8px] font-bold mt-1 px-1 py-0.5 rounded ${temp.bg} ${temp.color}">${temp.icon} ${temp.label}</span>${expInfoHtml}${assignedLabel}</div><span class="text-[9px] font-mono font-bold text-brand-500 bg-brand-500/10 px-1.5 py-0.5 rounded shrink-0">${escapeHTML(pName)}</span></div><div class="flex justify-between items-end pl-1.5 pt-2 border-t border-slate-800"><span class="text-xs font-mono font-black text-slate-300">${formatCurrency(c.price)}</span><div class="flex items-center gap-1.5">${moveControls}<button onclick="openClientModal('${c.id}')" class="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-brand-500 transition-colors"><i class="fas fa-edit text-[10px]"></i></button></div></div></div>`;
+                            
+                        // Botão de Excluir liberado no Kanban[cite: 1]
+                        const delBtnKanban = ['admin', 'developer'].includes(state.currentUser.role) ?
+                            `<button onclick="deleteClient('${c.id}')" class="p-1 hover:bg-rose-500/20 rounded text-rose-500 transition-colors" title="Excluir"><i class="fas fa-trash text-[10px]"></i></button>` : '';
+
+                        return `<div class="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-sm cursor-grab hover:border-brand-500 transition-all relative overflow-hidden" draggable="true" ondragstart="handleDragStart(event, '${c.id}')" ondragend="handleDragEnd(event)">
+                            <div class="absolute left-0 top-0 bottom-0 w-1 ${statusColor}"></div>
+                            <div class="flex justify-between items-start mb-1.5 pl-1.5">
+                                <div class="truncate pr-1">
+                                    <span class="font-bold text-slate-200 text-xs truncate block" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</span>
+                                    <span class="inline-block text-[8px] font-bold mt-1 px-1 py-0.5 rounded ${temp.bg} ${temp.color}">${temp.icon} ${temp.label}</span>
+                                    ${expInfoHtml}${assignedLabel}
+                                </div>
+                                <span class="text-[9px] font-mono font-bold text-brand-500 bg-brand-500/10 px-1.5 py-0.5 rounded shrink-0">${escapeHTML(pName)}</span>
+                            </div>
+                            <div class="flex justify-between items-end pl-1.5 pt-2 border-t border-slate-800">
+                                <span class="text-xs font-mono font-black text-slate-300">${formatCurrency(c.price)}</span>
+                                <div class="flex items-center gap-1.5">
+                                    ${moveControls}
+                                    <button onclick="openClientModal('${c.id}')" class="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-brand-500 transition-colors" title="Editar"><i class="fas fa-edit text-[10px]"></i></button>
+                                    ${delBtnKanban}
+                                </div>
+                            </div>
+                        </div>`;
                     }).join('');
                 });
             }
