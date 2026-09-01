@@ -5405,7 +5405,10 @@ async function linkClientToAccountant(accountantId) {
             // ============================================================
             //  CLIENTE FINALIZADO
             // ============================================================
-            function markClientAsFinalized() {
+            // ============================================================
+            //  CLIENTE FINALIZADO
+            // ============================================================
+            async function markClientAsFinalized() {
                 const doc = document.getElementById('chrome-sim-doc').value.replace(/\D/g, '');
                 if (!doc) {
                     showToast('Digite um documento para finalizar.', 'error');
@@ -5422,20 +5425,21 @@ async function linkClientToAccountant(accountantId) {
                     return;
                 }
                 
-                finalizeClient(clientIndex);
+                await finalizeClient(clientIndex);
             }
 
-            function markClientAsFinalizedByDoc() {
-                markClientAsFinalized();
+            async function markClientAsFinalizedByDoc() {
+                await markClientAsFinalized();
             }
 
-            function finalizeClient(index) {
+            async function finalizeClient(index) {
                 const client = state.clients[index];
                 const oldStage = client.stage;
                 const todayIso = new Date().toISOString();
                 const todayDateOnly = todayIso.split('T')[0];
                 
-                client.stage = 'emitido';
+                // Altera a etapa automaticamente para 'pago'
+                client.stage = 'pago'; 
                 client.purchaseDate = todayDateOnly;
                 client.lastInteraction = todayIso;
                 
@@ -5445,21 +5449,39 @@ async function linkClientToAccountant(accountantId) {
                     client.expirationDate = pDate.toISOString().split('T')[0];
                 } catch (e) {}
                 
+                // Envia a atualização para o Supabase
+                const db = window.supabaseClient || window.supabase;
+                if (db) {
+                    const { error } = await db.from('clients')
+                        .update({ 
+                            stage: 'pago', 
+                            lastInteraction: todayIso,
+                            purchaseDate: client.purchaseDate,
+                            expirationDate: client.expirationDate
+                        })
+                        .eq('id', client.id);
+                        
+                    if (error) {
+                        console.error("Erro ao atualizar o lead no banco:", error);
+                        showToast("Erro ao sincronizar com o servidor.", "error");
+                    }
+                }
+                
                 state.logs.push({
                     id: 'l-' + Date.now(),
                     clientId: client.id,
-                    text: `Cliente Finalizado: Movido de ${oldStage.toUpperCase()} para EMITIDO`,
+                    text: `Cliente Finalizado: Movido de ${oldStage.toUpperCase()} para PAGO`,
                     timestamp: todayIso
                 });
                 
                 state.dailyScore += 15;
-                saveState();
-                refreshAllUI();
+                saveState(); 
+                refreshAllUI(); 
                 updateFinancialData();
                 document.getElementById('chrome-sim-doc').value = '';
-                showToast(`✅ Lead ${client.name} finalizado com sucesso!`);
+                showToast(`✅ Lead ${client.name} finalizado com sucesso e movido para Pago!`);
                 launchConfetti();
-                addNotification('Cliente Finalizado', `${client.name} foi finalizado e movido para EMITIDO.`);
+                addNotification('Cliente Finalizado', `${client.name} foi finalizado e movido para PAGO.`);
             }
 
             // ============================================================
